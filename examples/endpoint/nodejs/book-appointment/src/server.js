@@ -39,7 +39,7 @@ app.post("/", async (req, res) => {
     );
   }
 
-  if(!isRequestSignatureValid(req)) {
+  if (!isRequestSignatureValid(req)) {
     // Return status code 432 if request signature does not match.
     // To learn more about return error codes visit: https://developers.facebook.com/docs/whatsapp/flows/reference/error-codes#endpoint_error_codes
     return res.status(432).send();
@@ -88,11 +88,13 @@ Checkout README.md to start.</pre>`);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is listening on port: ${PORT}`);
+  console.log(`Server is Running on port: ${PORT}`);
+  console.log(`Server URL:  https://raleigh-radiochemical-susie.ngrok-free.dev`);
+
 });
 
 function isRequestSignatureValid(req) {
-  if(!APP_SECRET) {
+  if (!APP_SECRET) {
     console.warn("App Secret is not set up. Please Add your app secret in /.env file to check for request validation");
     return true;
   }
@@ -104,7 +106,7 @@ function isRequestSignatureValid(req) {
   const digestString = hmac.update(req.rawBody).digest('hex');
   const digestBuffer = Buffer.from(digestString, "utf-8");
 
-  if ( !crypto.timingSafeEqual(digestBuffer, signatureBuffer)) {
+  if (!crypto.timingSafeEqual(digestBuffer, signatureBuffer)) {
     console.error("Error: Request Signature did not match");
     return false;
   }
