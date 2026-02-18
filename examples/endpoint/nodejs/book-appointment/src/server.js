@@ -24,8 +24,9 @@ app.use(
     },
   }),
 );
+const endpoint = process.env.endpoint || "https://raleigh-radiochemical-susie.ngrok-free.dev";
 const PRIVATE_KEY = fs.readFileSync("./src/subhash.pem", "utf-8");
-const { APP_SECRET, PASSPHRASE = "", PORT = "3002", endpoint } = process.env;
+const { APP_SECRET, PASSPHRASE = "", PORT = "3002" } = process.env;
 
 /*
 Example:
