@@ -4,11 +4,15 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import "dotenv/config";
 
 import express from "express";
 import { decryptRequest, encryptResponse, FlowEndpointException } from "./encryption.js";
 import { getNextScreen } from "./flow.js";
 import crypto from "crypto";
+import fs from "fs";
+// import dotenv from "dotenv";
+// dotenv.config();
 
 const app = express();
 
@@ -20,8 +24,8 @@ app.use(
     },
   }),
 );
-
-const { APP_SECRET, PRIVATE_KEY, PASSPHRASE = "", PORT = "3000" } = process.env;
+const PRIVATE_KEY = fs.readFileSync("./src/subhash.pem", "utf-8");
+const { APP_SECRET, PASSPHRASE = "", PORT = "3002", endpoint } = process.env;
 
 /*
 Example:
@@ -33,12 +37,13 @@ MIIE...
 */
 
 app.post("/", async (req, res) => {
+  console.log("📥 Received Request:", req.body);
   if (!PRIVATE_KEY) {
     throw new Error(
       'Private key is empty. Please check your env variable "PRIVATE_KEY".'
     );
   }
-
+  console.log("🔐 Verifying Request Signature...");
   if (!isRequestSignatureValid(req)) {
     // Return status code 432 if request signature does not match.
     // To learn more about return error codes visit: https://developers.facebook.com/docs/whatsapp/flows/reference/error-codes#endpoint_error_codes
@@ -47,6 +52,7 @@ app.post("/", async (req, res) => {
 
   let decryptedRequest = null;
   try {
+    console.log("🔐 Decrypting Request...");
     decryptedRequest = decryptRequest(req.body, PRIVATE_KEY, PASSPHRASE);
   } catch (err) {
     console.error(err);
@@ -89,7 +95,7 @@ Checkout README.md to start.</pre>`);
 
 app.listen(PORT, () => {
   console.log(`Server is Running on port: ${PORT}`);
-  console.log(`Server URL:  https://raleigh-radiochemical-susie.ngrok-free.dev`);
+  console.log(`Server URL:${endpoint}`);
 
 });
 
