@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// this object is generated from Flow Builder under "..." > Endpoint > Snippets > Responses
-const SCREEN_RESPONSES = {
+import { triggerFlightSelectionApi } from "./flightSelectionApi.js";
+
+const APPOINTMENT_FLOW_RESPONSES = {
   APPOINTMENT: {
     screen: "APPOINTMENT",
     data: {
@@ -123,21 +124,168 @@ const SCREEN_RESPONSES = {
     screen: "TERMS",
     data: {},
   },
-  SUCCESS: {
-    screen: "SUCCESS",
+};
+
+const TRAVEL_FLOW_RESPONSES = {
+  TRAVEL_SCREEN: {
+    screen: "Travel_Screen",
+    data: {},
+  },
+  FLIGHT_SCREEN: {
+    screen: "Flight_screen",
     data: {
-      extension_message_response: {
-        params: {
-          flow_token: "REPLACE_FLOW_TOKEN",
-          some_param_name: "PASS_CUSTOM_VALUE",
-        },
+      FlightDate: "2026-01-13",
+      FlightType: "D",
+    },
+  },
+};
+
+const SUCCESS_RESPONSE = {
+  screen: "SUCCESS",
+  data: {
+    extension_message_response: {
+      params: {
+        flow_token: "REPLACE_FLOW_TOKEN",
+        some_param_name: "PASS_CUSTOM_VALUE",
       },
     },
   },
 };
 
+const APPOINTMENT_FLOW_SCREENS = new Set(
+  Object.values(APPOINTMENT_FLOW_RESPONSES).map((value) => value.screen)
+);
+const TRAVEL_FLOW_SCREENS = new Set(
+  Object.values(TRAVEL_FLOW_RESPONSES).map((value) => value.screen)
+);
+
+const buildSuccessResponse = (flow_token, data = {}) => ({
+  ...SUCCESS_RESPONSE,
+  data: {
+    extension_message_response: {
+      params: {
+        flow_token,
+        ...data,
+      },
+    },
+  },
+});
+
+const getAppointmentFlowInitResponse = () => ({
+  ...APPOINTMENT_FLOW_RESPONSES.APPOINTMENT,
+  data: {
+    ...APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data,
+    // these fields are disabled initially. Each field is enabled when previous fields are selected
+    is_location_enabled: false,
+    is_date_enabled: false,
+    is_time_enabled: false,
+  },
+});
+
+const handleAppointmentFlowDataExchange = (screen, data, flow_token) => {
+  switch (screen) {
+    case "APPOINTMENT":
+      return {
+        ...APPOINTMENT_FLOW_RESPONSES.APPOINTMENT,
+        data: {
+          ...APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data,
+          is_location_enabled: Boolean(data?.department),
+          is_date_enabled: Boolean(data?.department) && Boolean(data?.location),
+          is_time_enabled:
+            Boolean(data?.department) &&
+            Boolean(data?.location) &&
+            Boolean(data?.date),
+          location: APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.location.slice(
+            0,
+            3
+          ),
+          date: APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.date.slice(0, 3),
+          time: APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.time.slice(0, 3),
+        },
+      };
+    case "DETAILS": {
+      const departmentName =
+        APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.department.find(
+          (dept) => dept.id === data?.department
+        )?.title ?? data?.department;
+      const locationName =
+        APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.location.find(
+          (loc) => loc.id === data?.location
+        )?.title ?? data?.location;
+      const dateName =
+        APPOINTMENT_FLOW_RESPONSES.APPOINTMENT.data.date.find(
+          (date) => date.id === data?.date
+        )?.title ?? data?.date;
+
+      const appointment = `${departmentName} at ${locationName}
+${dateName} at ${data?.time}`;
+
+      const details = `Name: ${data?.name}
+Email: ${data?.email}
+Phone: ${data?.phone}
+"${data?.more_details}"`;
+
+      return {
+        ...APPOINTMENT_FLOW_RESPONSES.SUMMARY,
+        data: {
+          appointment,
+          details,
+          ...data,
+        },
+      };
+    }
+    case "SUMMARY":
+      return buildSuccessResponse(flow_token);
+    default:
+      return null;
+  }
+};
+
+const getTravelFlowInitResponse = () => ({
+  ...TRAVEL_FLOW_RESPONSES.TRAVEL_SCREEN,
+});
+
+const handleTravelFlowDataExchange = (screen, data) => {
+  switch (screen) {
+    case "Travel_Screen": {
+      const receivedFlightDate = data?.FlightDate ?? data?.calendar;
+      const receivedFlightType = data?.FlightType ?? data?.appointment_type;
+      const FlightDate =
+        receivedFlightDate ?? TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data.FlightDate;
+      const FlightType =
+        receivedFlightType ?? TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data.FlightType;
+
+      triggerFlightSelectionApi({
+        FlightDate: receivedFlightDate,
+        FlightType: receivedFlightType,
+      }).catch((error) => {
+        console.error("Failed to trigger flight selection API:", error.message);
+      });
+
+      return {
+        ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN,
+        data: {
+          ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data,
+          FlightDate,
+          FlightType,
+        },
+      };
+    }
+    case "Flight_screen":
+      return {
+        ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN,
+        data: {
+          ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data,
+          ...data,
+        },
+      };
+    default:
+      return null;
+  }
+};
+
 export const getNextScreen = async (decryptedBody) => {
-  const { screen, data, version, action, flow_token } = decryptedBody;
+  const { screen, data, action, flow_token } = decryptedBody;
   // handle health check request
   if (action === "ping") {
     return {
@@ -157,95 +305,43 @@ export const getNextScreen = async (decryptedBody) => {
     };
   }
 
-  // handle initial request when opening the flow and display APPOINTMENT screen
+  // flow segregation at INIT time
   if (action === "INIT") {
-    return {
-      ...SCREEN_RESPONSES.APPOINTMENT,
-      data: {
-        ...SCREEN_RESPONSES.APPOINTMENT.data,
-        // these fields are disabled initially. Each field is enabled when previous fields are selected
-        is_location_enabled: false,
-        is_date_enabled: false,
-        is_time_enabled: false,
-      },
-    };
+    if (TRAVEL_FLOW_SCREENS.has(screen)) {
+      return getTravelFlowInitResponse();
+    }
+
+    return getAppointmentFlowInitResponse();
   }
 
   if (action === "data_exchange") {
-    // handle the request based on the current screen
-    switch (screen) {
-      // handles when user interacts with APPOINTMENT screen
-      case "APPOINTMENT":
-        // update the appointment fields based on current user selection
-        return {
-          ...SCREEN_RESPONSES.APPOINTMENT,
-          data: {
-            // copy initial screen data then override specific fields
-            ...SCREEN_RESPONSES.APPOINTMENT.data,
-            // each field is enabled only when previous fields are selected
-            is_location_enabled: Boolean(data.department),
-            is_date_enabled: Boolean(data.department) && Boolean(data.location),
-            is_time_enabled:
-              Boolean(data.department) &&
-              Boolean(data.location) &&
-              Boolean(data.date),
+    if (TRAVEL_FLOW_SCREENS.has(screen)) {
+      const travelResponse = handleTravelFlowDataExchange(screen, data);
+      if (travelResponse) {
+        return travelResponse;
+      }
+    }
 
-            //TODO: filter each field options based on current selection, here we filter randomly instead
-            location: SCREEN_RESPONSES.APPOINTMENT.data.location.slice(0, 3),
-            date: SCREEN_RESPONSES.APPOINTMENT.data.date.slice(0, 3),
-            time: SCREEN_RESPONSES.APPOINTMENT.data.time.slice(0, 3),
-          },
-        };
+    if (APPOINTMENT_FLOW_SCREENS.has(screen)) {
+      const appointmentResponse = handleAppointmentFlowDataExchange(
+        screen,
+        data,
+        flow_token
+      );
+      if (appointmentResponse) {
+        return appointmentResponse;
+      }
+    }
+  }
 
-      // handles when user completes DETAILS screen
-      case "DETAILS":
-        // the client payload contains selected ids from dropdown lists, we need to map them to names to display to user
-        const departmentName =
-          SCREEN_RESPONSES.APPOINTMENT.data.department.find(
-            (dept) => dept.id === data.department
-          ).title;
-        const locationName = SCREEN_RESPONSES.APPOINTMENT.data.location.find(
-          (loc) => loc.id === data.location
-        ).title;
-        const dateName = SCREEN_RESPONSES.APPOINTMENT.data.date.find(
-          (date) => date.id === data.date
-        ).title;
+  // terminal complete action, isolated per flow
+  if (action === "complete") {
+    if (TRAVEL_FLOW_SCREENS.has(screen)) {
+      return buildSuccessResponse(flow_token, data);
+    }
 
-        const appointment = `${departmentName} at ${locationName}
-${dateName} at ${data.time}`;
-
-        const details = `Name: ${data.name}
-Email: ${data.email}
-Phone: ${data.phone}
-"${data.more_details}"`;
-
-        return {
-          ...SCREEN_RESPONSES.SUMMARY,
-          data: {
-            appointment,
-            details,
-            // return the same fields sent from client back to submit in the next step
-            ...data,
-          },
-        };
-
-      // handles when user completes SUMMARY screen
-      case "SUMMARY":
-        // TODO: save appointment to your database
-        // send success response to complete and close the flow
-        return {
-          ...SCREEN_RESPONSES.SUCCESS,
-          data: {
-            extension_message_response: {
-              params: {
-                flow_token,
-              },
-            },
-          },
-        };
-
-      default:
-        break;
+    if (APPOINTMENT_FLOW_SCREENS.has(screen)) {
+      return buildSuccessResponse(flow_token, data);
     }
   }
 
