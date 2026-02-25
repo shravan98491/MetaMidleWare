@@ -1,0 +1,162 @@
+{
+  "version": "7.3",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "Travel_Screen": [
+      "Flight_screen"
+    ],
+    "Flight_screen": []
+  },
+  "screens": [
+    {
+      "id": "Travel_Screen",
+      "title": "Travel details",
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "TravelDetails",
+            "children": [
+              {
+                "type": "RadioButtonsGroup",
+                "name": "appointment_type",
+                "label": "Flight Type",
+                "description": "Choose Flight Type and Date",
+                "required": true,
+                "data-source": [
+                  {
+                    "id": "D",
+                    "title": "Departure"
+                  },
+                  {
+                    "id": "A",
+                    "title": "Arrival"
+                  }
+                ]
+              },
+              {
+                "type": "CalendarPicker",
+                "name": "calendar",
+                "label": "Flight Date",
+                "helper-text": "Please select the flight date",
+                "required": true,
+                "mode": "single",
+                "min-date": "2026-01-13",
+                "max-date": "2026-01-28",
+                "include-days": [
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu",
+                  "Fri",
+                  "Sat",
+                  "Sun"
+                ]
+              },
+              {
+                "type": "Footer",
+                "label": "Continue",
+                "on-click-action": {
+                  "name": "data_exchange",
+                  "payload": {
+                    "FlightDate": "${form.calendar}",
+                    "FlightType": "${form.appointment_type}"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "Flight_screen",
+      "title": "Flight Details",
+      "terminal": true,
+      "data": {
+        "FlightDate": {
+          "type": "string",
+          "__example__": "10-01-2025"
+        },
+        "FlightType": {
+          "type": "string",
+          "__example__": "A"
+        },
+        "flight_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "AY1964 Helsinki 00:35",
+              "title": "AY1964 Helsinki 00:35"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextSubheading",
+            "text": "Flight Name"
+          },
+          {
+            "type": "Form",
+            "name": "FlightName",
+            "children": [
+              {
+                "type": "Dropdown",
+                "name": "Flight_name",
+                "required": true,
+                "label": "Please choose flight",
+                "data-source": "${data.flight_options}"
+              },
+              {
+                "type": "RadioButtonsGroup",
+                "name": "Payment_type",
+                "label": "Payment Type",
+                "description": "Choose Payment type",
+                "required": true,
+                "data-source": [
+                  {
+                    "id": "DDF",
+                    "title": "Pay at DDF"
+                  },
+                  {
+                    "id": "online",
+                    "title": "Pay online"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Complete",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "FlightDate": "${screen.Travel_Screen.form.calendar}",
+                "FlightType": "${screen.Travel_Screen.form.appointment_type}",
+                "FlightName": "${form.Flight_name}",
+                "PaymentType": "${form.Payment_type}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

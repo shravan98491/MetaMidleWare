@@ -136,6 +136,7 @@ const TRAVEL_FLOW_RESPONSES = {
     data: {
       FlightDate: "2026-01-13",
       FlightType: "D",
+      flight_options: [],
     },
   },
 };
@@ -245,22 +246,80 @@ const getTravelFlowInitResponse = () => ({
   ...TRAVEL_FLOW_RESPONSES.TRAVEL_SCREEN,
 });
 
-const handleTravelFlowDataExchange = (screen, data) => {
+const NO_FLIGHTS_OPTION = [
+  {
+    id: "NO_FLIGHTS_AVAILABLE",
+    title: "No flights available",
+    enabled: false,
+  },
+];
+
+const buildFlightOption = (flight) => {
+  if (!flight || typeof flight !== "object") {
+    return null;
+  }
+
+  const title =
+    (typeof flight.Flight_Content === "string" && flight.Flight_Content.trim()) ||
+    [flight.FLIGHT_NO, flight.CITY, flight.FLIGHT_TIME]
+      .filter((value) => typeof value === "string" && value.trim())
+      .join(" ");
+
+  if (!title) {
+    return null;
+  }
+
+  return {
+    id: title,
+    title,
+  };
+};
+
+const buildFlightOptions = (flightRows) => {
+  if (!Array.isArray(flightRows) || flightRows.length === 0) {
+    return NO_FLIGHTS_OPTION;
+  }
+
+  const seen = new Set();
+  const options = [];
+
+  for (const flight of flightRows) {
+    const option = buildFlightOption(flight);
+    if (!option || seen.has(option.id)) {
+      continue;
+    }
+
+    seen.add(option.id);
+    options.push(option);
+  }
+
+  return options.length > 0 ? options : NO_FLIGHTS_OPTION;
+};
+
+const handleTravelFlowDataExchange = async (screen, data) => {
   switch (screen) {
     case "Travel_Screen": {
       const receivedFlightDate = data?.FlightDate ?? data?.calendar;
       const receivedFlightType = data?.FlightType ?? data?.appointment_type;
+      const receivedTime = data?.Time ?? new Date().toISOString();
       const FlightDate =
         receivedFlightDate ?? TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data.FlightDate;
       const FlightType =
         receivedFlightType ?? TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data.FlightType;
 
-      triggerFlightSelectionApi({
-        FlightDate: receivedFlightDate,
-        FlightType: receivedFlightType,
-      }).catch((error) => {
+      let flightOptions = TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data.flight_options;
+
+      try {
+        const flightRows = await triggerFlightSelectionApi({
+          FlightDate,
+          FlightType,
+          Time: receivedTime,
+        });
+        flightOptions = buildFlightOptions(flightRows);
+      } catch (error) {
         console.error("Failed to trigger flight selection API:", error.message);
-      });
+        flightOptions = NO_FLIGHTS_OPTION;
+      }
 
       return {
         ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN,
@@ -268,6 +327,7 @@ const handleTravelFlowDataExchange = (screen, data) => {
           ...TRAVEL_FLOW_RESPONSES.FLIGHT_SCREEN.data,
           FlightDate,
           FlightType,
+          flight_options: flightOptions,
         },
       };
     }
@@ -316,7 +376,7 @@ export const getNextScreen = async (decryptedBody) => {
 
   if (action === "data_exchange") {
     if (TRAVEL_FLOW_SCREENS.has(screen)) {
-      const travelResponse = handleTravelFlowDataExchange(screen, data);
+      const travelResponse = await handleTravelFlowDataExchange(screen, data);
       if (travelResponse) {
         return travelResponse;
       }
